@@ -89,6 +89,8 @@ module Kitchen
       def build_ssh_args(state)
         combined = config.to_hash.merge(state)
 
+        logger.debug("Proxy Command: #{combined[:proxy_command]}")
+
         opts = Hash.new
         opts[:user_known_hosts_file] = "/dev/null"
         opts[:paranoid] = false
@@ -130,7 +132,12 @@ module Kitchen
       end
 
       def wait_for_sshd(hostname, username = nil, options = {})
-        SSH.new(hostname, username, { :logger => logger }.merge(options)).wait
+        combined = config.to_hash.merge(options)
+        combined[:socks_version] = combined[:socks_version] if combined[:socks_version]
+        combined[:socks_server] = combined[:socks_server] if combined[:socks_server]
+        combined[:socks_port] = combined[:socks_port] if combined[:socks_port]
+
+        SSH.new(hostname, username, { :logger => logger }.merge(combined)).wait
       end
     end
   end
