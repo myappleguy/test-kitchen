@@ -19,7 +19,7 @@
 require 'logger'
 require 'net/ssh'
 require 'net/scp'
-require 'net/ssh/proxy/command'
+require 'net/ssh/proxy/command' 
 require 'socket'
 
 require 'kitchen/errors'
@@ -128,6 +128,10 @@ module Kitchen
         if connect_opts.delete(:proxy_command)
           connect_opts[:proxy] = Net::SSH::Proxy::Command.new(options[:proxy_command])
         end
+
+        # Socksify the connection if needed
+        socksify(connect_opts)
+
         Net::SSH.start(hostname, username, connect_opts)
       rescue *rescue_exceptions => e
         if (retries -= 1) > 0
@@ -175,25 +179,8 @@ module Kitchen
     end
 
     def test_ssh
-      # Check to see if we're supposed to proxy the connection to the host
-      if options[:socks_version]
-        require 'socksify'
-
-        unless options[:socks_server]
-          raise ClientError, "Option socks_server must be set when socks_version is set!"
-        end
-
-        unless options[:socks_port]
-          raise ClientError, "Option socks_port must be set when socks_version is set!"
-        end 
-        
-        logger.debug("Using SOCKS proxy (#{options[:socks_server]}:#{options[:socks_port]})")
-
-        TCPSocket::socks_server = options[:socks_server]
-        TCPSocket::socks_port = options[:socks_port]
-        TCPSocket::socks_version = options[:socks_version]
-        Socksify::debug = true
-      end
+      # Socksify the connection if needed
+      socksify(options.dup)
 
       socket = TCPSocket.new(hostname, port)
       IO.select([socket], nil, nil, 5)
@@ -205,6 +192,29 @@ module Kitchen
       false
     ensure
       socket && socket.close
+    end
+
+    def socksify(options)
+      # Check to see if we're supposed to proxy the connection to the host
+      if options[:socks_version]
+        unless options[:socks_server]
+          raise ClientError, "Option socks_server must be set when socks_version is set!"
+        end
+
+        unless options[:socks_port]
+          raise ClientError, "Option socks_port must be set when socks_version is set!"
+        end 
+        
+        logger.debug("Using SOCKS proxy (#{options[:socks_server]}:#{options[:socks_port]})")
+
+        require 'socksify'
+
+        TCPSocket::socks_server = options.delete(:socks_server)
+        TCPSocket::socks_port = options.delete(:socks_port)
+        TCPSocket::socks_version = options.delete(:socks_version)
+
+        Socksify::debug = true
+      end
     end
   end
 end
