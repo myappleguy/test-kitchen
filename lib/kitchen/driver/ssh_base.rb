@@ -220,12 +220,15 @@ module Kitchen
       def build_ssh_args(state)
         combined = config.to_hash.merge(state)
 
+        logger.debug("Proxy Command: #{combined[:proxy_command]}")
+
         opts = Hash.new
         opts[:user_known_hosts_file] = "/dev/null"
         opts[:paranoid] = false
         opts[:keys_only] = true if combined[:ssh_key]
         opts[:password] = combined[:password] if combined[:password]
         opts[:forward_agent] = combined[:forward_agent] if combined.key? :forward_agent
+        opts[:proxy_command] = combined[:proxy_command] if combined[:proxy_command]
         opts[:port] = combined[:port] if combined[:port]
         opts[:keys] = Array(combined[:ssh_key]) if combined[:ssh_key]
         opts[:logger] = logger
@@ -287,12 +290,18 @@ module Kitchen
       # @param options [Hash] configuration hash (default: `{}`)
       # @api private
       def wait_for_sshd(hostname, username = nil, options = {})
-        pseudo_state = { :hostname => hostname }
-        pseudo_state[:username] = username if username
-        pseudo_state.merge!(options)
+        #pseudo_state = { :hostname => hostname }
+        #pseudo_state[:username] = username if username
+        #pseudo_state.merge!(options)
 
-        instance.transport.connection(backcompat_merged_state(pseudo_state)).
-          wait_until_ready
+        #instance.transport.connection(backcompat_merged_state(pseudo_state)).
+          #wait_until_ready
+        combined = config.to_hash.merge(options)
+        combined[:socks_version] = combined[:socks_version] if combined[:socks_version]
+        combined[:socks_server] = combined[:socks_server] if combined[:socks_server]
+        combined[:socks_port] = combined[:socks_port] if combined[:socks_port]
+
+        SSH.new(hostname, username, { :logger => logger }.merge(combined)).wait
       end
 
       # Intercepts any bare #puts calls in subclasses and issues an INFO log

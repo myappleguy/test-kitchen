@@ -21,5 +21,6 @@ tmp
 .project
 .DS_Store
 .kitchen/
+.kitchen/*
 .kitchen.yml
 .kitchen.local.yml

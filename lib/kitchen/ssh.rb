@@ -20,6 +20,7 @@ require "logger"
 require "net/ssh"
 require "net/scp"
 require "socket"
+require "net/ssh/proxy/command"
 
 require "kitchen/errors"
 require "kitchen/login_command"
@@ -145,6 +146,10 @@ module Kitchen
       if options.key?(:forward_agent)
         args += %W[ -o ForwardAgent=#{options[:forward_agent] ? "yes" : "no"} ]
       end
+      if options.key?(:proxy_command)
+        logger.debug("Proxy Command: #{options[:proxy_command]}")
+        args += %W[ -o ProxyCommand=#{options[:proxy_command]} ]
+      end
       Array(options[:keys]).each { |ssh_key| args += %W[ -i #{ssh_key} ] }
       args += %W[ -p #{port} ]
       args += %W[ #{username}@#{hostname} ]
@@ -194,16 +199,24 @@ module Kitchen
         Errno::ECONNRESET, Errno::ENETUNREACH, Errno::EHOSTUNREACH,
         Net::SSH::Disconnect, Net::SSH::AuthenticationFailed
       ]
-      retries = options[:ssh_retries] || 3
+      retries = options[:ssh_retries] || 10
 
       begin
         logger.debug("[SSH] opening connection to #{self}")
-        Net::SSH.start(hostname, username, options)
+        connect_opts = options.dup
+        if connect_opts.delete(:proxy_command)
+          connect_opts[:proxy] = Net::SSH::Proxy::Command.new(options[:proxy_command])
+        end
+
+        # Socksify the connection if needed
+        socksify(connect_opts)
+
+        Net::SSH.start(hostname, username, connect_opts)
       rescue *rescue_exceptions => e
         retries -= 1
         if retries > 0
           logger.info("[SSH] connection failed, retrying (#{e.inspect})")
-          sleep options[:ssh_timeout] || 1
+          sleep options[:ssh_timeout] || 15
           retry
         else
           logger.warn("[SSH] connection failed, terminating (#{e.inspect})")
@@ -262,6 +275,9 @@ module Kitchen
     #   otherwise
     # @api private
     def test_ssh
+      # Socksify the connection if needed
+      socksify(options.dup)
+
       socket = TCPSocket.new(hostname, port)
       IO.select([socket], nil, nil, 5)
     rescue *SOCKET_EXCEPTIONS
@@ -271,6 +287,29 @@ module Kitchen
       false
     ensure
       socket && socket.close
+    end
+
+    def socksify(options)
+      # Check to see if we're supposed to proxy the connection to the host
+      if options[:socks_version]
+        unless options[:socks_server]
+          raise ClientError, "Option socks_server must be set when socks_version is set!"
+        end
+
+        unless options[:socks_port]
+          raise ClientError, "Option socks_port must be set when socks_version is set!"
+        end
+
+        logger.debug("Using SOCKS proxy (#{options[:socks_server]}:#{options[:socks_port]})")
+
+        require 'socksify'
+
+        TCPSocket::socks_server = options.delete(:socks_server)
+        TCPSocket::socks_port = options.delete(:socks_port)
+        TCPSocket::socks_version = options.delete(:socks_version)
+
+        Socksify::debug = true
+      end
     end
   end
 end
