@@ -199,6 +199,9 @@ module Kitchen
         # @return [Net::SSH::Connection::Session] the SSH connection session
         # @api private
         def establish_connection(opts)
+          # TODO - this might be the spot tp add socks proxy code
+          # look at kitchen/ssh.rb#establish_connection
+          #
           logger.debug("[SSH] opening connection to #{self}")
           Net::SSH.start(hostname, username, options)
         rescue *RESCUE_EXCEPTIONS_ON_ESTABLISH => e
@@ -327,7 +330,6 @@ module Kitchen
           logger.debug("[SSH] shutting previous connection #{@connection}")
           @connection.close
         end
-
         @connection_options = options
         @connection = Kitchen::Transport::Ssh::Connection.new(options, &block)
       end

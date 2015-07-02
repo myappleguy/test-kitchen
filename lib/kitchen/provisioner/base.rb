@@ -62,6 +62,7 @@ module Kitchen
         sandbox_dirs = Dir.glob(File.join(sandbox_path, "*"))
 
         instance.transport.connection(state) do |conn|
+          #FIXME - trys to connect without socks here and times out
           conn.execute(install_command)
           conn.execute(init_command)
           info("Transferring files to #{instance.to_str}")

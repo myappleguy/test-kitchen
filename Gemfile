@@ -12,3 +12,6 @@ end
 group :test do
   gem "codeclimate-test-reporter", :require => nil
 end
+
+gem 'pry'
+gem 'pry-nav
