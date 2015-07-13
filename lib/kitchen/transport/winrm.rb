@@ -51,6 +51,7 @@ module Kitchen
       default_config :connection_retries, 5
       default_config :connection_retry_sleep, 1
       default_config :max_wait_until_ready, 600
+      default_config :winrm_transport, :plaintext
 
       # (see Base#connection)
       def connection(state, &block)
@@ -220,7 +221,7 @@ module Kitchen
           service_args = [endpoint, winrm_transport, options]
           @service = ::WinRM::WinRMWebService.new(*service_args)
           closer = WinRM::Transport::ShellCloser.new("#{self}", logger.debug?, service_args)
-
+          
           executor = WinRM::Transport::CommandExecutor.new(@service, logger, closer)
           retryable(opts) do
             logger.debug("[WinRM] opening remote shell on #{self}")
@@ -392,9 +393,7 @@ module Kitchen
           :instance_name          => instance.name,
           :kitchen_root           => data[:kitchen_root],
           :logger                 => logger,
-          :winrm_transport        => :plaintext,
-          :disable_sspi           => true,
-          :basic_auth_only        => true,
+          :winrm_transport        => data[:winrm_transport].to_sym,
           :endpoint               => data[:endpoint_template] % data,
           :user                   => data[:username],
           :pass                   => data[:password],
@@ -402,8 +401,12 @@ module Kitchen
           :connection_retries     => data[:connection_retries],
           :connection_retry_sleep => data[:connection_retry_sleep],
           :max_wait_until_ready   => data[:max_wait_until_ready]
-        }
-
+        } 
+        opts.merge!({
+          :disable_sspi           => true,
+          :basic_auth_only        => true
+        }) unless sspi_enabled?
+        
         opts
       end
 
@@ -452,8 +455,27 @@ module Kitchen
       # Load WinRM::Transport code.
       #
       # @api private
+      def host_os_windows?
+        case RbConfig::CONFIG["host_os"]
+          when /darwin/
+            false
+          when /mswin|msys|mingw|cygwin|bccwin|wince|emc/
+            true
+          when /linux/
+            false
+          else
+            false
+          end
+      end
+      
+      def sspi_enabled?
+        enabled = host_os_windows? && config[:winrm_transport].to_sym == :sspinegotiate
+        logger.debug("Checking for Negotiate Auth: Enabled = #{enabled}")
+      end
+      
       def load_winrm_transport!
         silence_warnings { require "winrm" }
+        silence_warnings { require "winrm-s" } if sspi_enabled?
         require "winrm/transport/shell_closer"
         require "winrm/transport/command_executor"
         require "winrm/transport/file_transporter"
