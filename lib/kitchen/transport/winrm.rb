@@ -471,6 +471,7 @@ module Kitchen
       def sspi_enabled?
         enabled = host_os_windows? && config[:winrm_transport].to_sym == :sspinegotiate
         logger.debug("Checking for Negotiate Auth: Enabled = #{enabled}")
+        enabled
       end
       
       def load_winrm_transport!
