@@ -203,6 +203,7 @@ module Kitchen
           # look at kitchen/ssh.rb#establish_connection
           #
           logger.debug("[SSH] opening connection to #{self}")
+          require 'pry'; binding.pry
           Net::SSH.start(hostname, username, options)
         rescue *RESCUE_EXCEPTIONS_ON_ESTABLISH => e
           if (opts[:retries] -= 1) > 0
@@ -230,11 +231,8 @@ module Kitchen
         def execute_with_exit_code(command)
           exit_code = nil
           session.open_channel do |channel|
-
             channel.request_pty
-
             channel.exec(command) do |_ch, _success|
-
               channel.on_data do |_ch, data|
                 logger << data
               end
@@ -261,6 +259,7 @@ module Kitchen
           @connection_retries     = @options.delete(:connection_retries)
           @connection_retry_sleep = @options.delete(:connection_retry_sleep)
           @max_wait_until_ready   = @options.delete(:max_wait_until_ready)
+          #@proxy_command          = @options[:proxy_command]
         end
 
         # Returns a connection session, or establishes one when invoked the
